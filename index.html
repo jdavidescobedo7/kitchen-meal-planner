@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weekly Meal Planner + HEB List</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1f232c; --line:#2a2f3a;
+    --text:#e8eaed; --muted:#9aa3b2; --accent:#e0492f; --accent2:#3a7d5d;
+    --chip:#262b35; --good:#3a7d5d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{padding:20px 22px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline}
+  header h1{font-size:20px;margin:0;font-weight:700}
+  header .sub{color:var(--muted);font-size:13px}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px}
+  .controls{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:18px}
+  .controls h2{margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .row{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{background:var(--chip);border:1px solid var(--line);color:var(--text);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;user-select:none}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  select,button{font:inherit}
+  select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px 18px;font-weight:700;cursor:pointer}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);font-weight:600}
+  .grid{display:grid;grid-template-columns:1.3fr 1fr;gap:18px}
+  @media(max-width:840px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .card h2{margin:0;padding:14px 16px;border-bottom:1px solid var(--line);font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .meal{padding:14px 16px;border-bottom:1px solid var(--line)}
+  .meal:last-child{border-bottom:none}
+  .meal .top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+  .meal .day{font-size:12px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  .meal .name{font-size:16px;font-weight:700;margin:2px 0}
+  .meal .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .tag{font-size:11px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:6px;padding:2px 7px}
+  .meal .meta{font-size:12px;color:var(--muted);margin-top:6px}
+  .meal a.rl{color:var(--accent2);font-size:12px;text-decoration:none}
+  .meal a.rl:hover{text-decoration:underline}
+  .meal .swap{float:right;font-size:12px;background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:7px;padding:3px 8px;cursor:pointer}
+  details.recipe{margin-top:8px}
+  details.recipe summary{cursor:pointer;color:var(--muted);font-size:12px}
+  details.recipe ol{margin:8px 0 0 18px;padding:0;color:var(--text);font-size:13px}
+  details.recipe ul{margin:6px 0 0 18px;padding:0;color:var(--muted);font-size:12px}
+  .aisle{padding:10px 16px;border-bottom:1px solid var(--line)}
+  .aisle:last-child{border-bottom:none}
+  .aisle h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--accent)}
+  .item{display:flex;align-items:flex-start;gap:9px;padding:4px 0;font-size:14px}
+  .item input{margin-top:3px;width:16px;height:16px;accent-color:var(--good)}
+  .item .q{color:var(--muted);font-size:12px}
+  .item.checked label{text-decoration:line-through;color:var(--muted)}
+  .item a{margin-left:auto;color:var(--accent2);font-size:11px;text-decoration:none;white-space:nowrap;padding-top:1px}
+  .item a:hover{text-decoration:underline}
+  .listhead{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;gap:8px;flex-wrap:wrap}
+  .listhead .n{font-size:12px;color:var(--muted)}
+  .empty{padding:40px 16px;text-align:center;color:var(--muted)}
+  footer{color:var(--muted);font-size:12px;text-align:center;padding:24px}
+  @media print{
+    body{background:#fff;color:#000}
+    header,.controls,.swap,.btn,.btn.ghost,details.recipe{display:none!important}
+    .card,.aisle,.meal{border-color:#ccc}
+    .grid{grid-template-columns:1fr}
+    a{color:#000!important}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🍳 Weekly Meal Planner</h1>
+  <span class="sub">Generates a week of dinners + an aisle-sorted HEB shopping list. Built for JD &amp; Chayslyn.</span>
+</header>
+
+<div class="wrap">
+  <div class="controls">
+    <h2>Plan settings</h2>
+    <div class="row">
+      <div class="field">
+        <label>Dinners this week</label>
+        <select id="count">
+          <option>4</option><option>5</option><option>6</option><option selected>7</option>
+        </select>
+      </div>
+      <div class="field" style="flex:1;min-width:240px">
+        <label>Cuisines (tap to toggle)</label>
+        <div class="chips" id="cuisineChips"></div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="field" style="flex:1;min-width:240px">
+        <label>Effort (optional filter — off = anything)</label>
+        <div class="chips" id="effortChips"></div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <button class="btn" id="genBtn">Generate week</button>
+      <button class="btn ghost" id="printBtn">Print plan</button>
+      <button class="btn ghost" id="copyBtn">Copy grocery list</button>
+      <span class="sub" id="status" style="align-self:center"></span>
+    </div>
+    <p class="sub" style="margin:12px 0 0">Honors your rules automatically: high-protein, no turkey, salmon-only fish, chickpea-only beans, minimal red sauce.</p>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>This week's dinners</h2>
+      <div id="meals"><div class="empty">Tap <b>Generate week</b> to build your plan.</div></div>
+    </div>
+    <div class="card">
+      <div class="listhead">
+        <h2 style="border:none;padding:0;margin:0">HEB grocery list</h2>
+        <span class="n" id="listCount"></span>
+      </div>
+      <div id="list"><div class="empty">Your consolidated shopping list will appear here.</div></div>
+    </div>
+  </div>
+</div>
+<footer>HEB has no public cart API, so each item links to an HEB search you tap to add. Cart automation can be layered on later.</footer>
+
+<script>
+/* ---------- HEB aisle order ---------- */
+const AISLE_ORDER = ["Produce","Meat","Seafood","Dairy & Eggs","Pantry & Dry Goods","Spices & Baking","Sauces & Condiments","Frozen","Bakery","Other"];
+const heb = q => "https://www.heb.com/search/?q=" + encodeURIComponent(q);
+
+/* ---------- Recipe library (all comply with constraints) ----------
+   i(name, qty, aisle) helper builds an ingredient. */
+const i = (name, qty, aisle) => ({name, qty, aisle});
+const RECIPES = [
+  /* ===== ASIAN ===== */
+  {id:"korean-beef-bowl",name:"Korean Ground Beef Bowls",cuisine:"Asian",effort:["fast"],protein:"beef",time:25,
+   tags:["high-protein","one-pan-ish"],
+   ing:[i("Ground beef (90/10)","1 lb","Meat"),i("Jasmine rice","1 cup","Pantry & Dry Goods"),i("Gochujang","1 tbsp (mild)","Sauces & Condiments"),i("Soy sauce","3 tbsp","Sauces & Condiments"),i("Garlic","3 cloves","Produce"),i("Fresh ginger","1 in","Produce"),i("Green onions","1 bunch","Produce"),i("Sesame oil","1 tbsp","Sauces & Condiments"),i("Eggs","2","Dairy & Eggs"),i("Sesame seeds","1 tsp","Spices & Baking")],
+   steps:["Cook rice.","Brown beef with garlic + ginger; drain.","Stir in gochujang, soy, sesame oil; simmer 2 min.","Serve over rice with fried egg, green onion, sesame."]},
+
+  {id:"teriyaki-salmon",name:"Sheet-Pan Teriyaki Salmon + Broccolini",cuisine:"Asian",effort:["fast","one-pan"],protein:"salmon",time:25,
+   tags:["high-protein","sheet-pan"],
+   ing:[i("Salmon fillets","2 (6 oz)","Seafood"),i("Broccolini","2 bunches","Produce"),i("Teriyaki sauce","1/3 cup","Sauces & Condiments"),i("Honey","1 tbsp","Pantry & Dry Goods"),i("Garlic","2 cloves","Produce"),i("Sesame seeds","1 tsp","Spices & Baking"),i("Jasmine rice","1 cup","Pantry & Dry Goods")],
+   steps:["Toss broccolini with oil on a sheet pan; roast 425°F 8 min.","Add salmon, brush with teriyaki+honey; roast 10–12 min.","Serve over rice, sprinkle sesame."]},
+
+  {id:"chicken-stirfry",name:"Garlic-Ginger Chicken Stir-Fry",cuisine:"Asian",effort:["fast","one-pan"],protein:"chicken",time:25,
+   tags:["high-protein","veg-forward"],
+   ing:[i("Chicken thighs (boneless)","1.25 lb","Meat"),i("Broccoli","1 head","Produce"),i("Bell pepper","1","Produce"),i("Soy sauce","3 tbsp","Sauces & Condiments"),i("Oyster sauce","2 tbsp","Sauces & Condiments"),i("Garlic","3 cloves","Produce"),i("Fresh ginger","1 in","Produce"),i("Cornstarch","1 tbsp","Spices & Baking"),i("Jasmine rice","1 cup","Pantry & Dry Goods")],
+   steps:["Sear chicken; remove.","Stir-fry broccoli + pepper.","Add garlic, ginger, sauces + cornstarch slurry; return chicken.","Serve over rice."]},
+
+  {id:"beef-broccoli",name:"Beef & Broccoli",cuisine:"Asian",effort:["fast","one-pan"],protein:"beef",time:30,
+   tags:["high-protein","veg-forward"],
+   ing:[i("Flank steak","1 lb","Meat"),i("Broccoli","1 head","Produce"),i("Soy sauce","1/4 cup","Sauces & Condiments"),i("Oyster sauce","2 tbsp","Sauces & Condiments"),i("Garlic","3 cloves","Produce"),i("Cornstarch","2 tbsp","Spices & Baking"),i("Brown sugar","1 tbsp","Spices & Baking"),i("Jasmine rice","1 cup","Pantry & Dry Goods")],
+   steps:["Slice steak thin, toss with cornstarch.","Sear; remove.","Stir-fry broccoli, add garlic + sauces.","Return beef, toss to glaze; serve over rice."]},
+
+  {id:"pad-krapow",name:"Thai Basil Chicken (Pad Krapow)",cuisine:"Asian",effort:["fast","one-pan"],protein:"chicken",time:20,
+   tags:["high-protein"],
+   ing:[i("Ground chicken","1 lb","Meat"),i("Thai basil","1 bunch","Produce"),i("Garlic","4 cloves","Produce"),i("Thai chili or serrano","1 (optional — omit for mild)","Produce"),i("Soy sauce","2 tbsp","Sauces & Condiments"),i("Fish sauce","1 tbsp","Sauces & Condiments"),i("Oyster sauce","1 tbsp","Sauces & Condiments"),i("Eggs","2","Dairy & Eggs"),i("Jasmine rice","1 cup","Pantry & Dry Goods")],
+   steps:["Fry garlic + chili.","Add chicken; brown.","Add sauces, then basil to wilt.","Serve over rice with a fried egg."]},
+
+  {id:"salmon-rice-bowl",name:"Salmon & Cucumber Rice Bowls",cuisine:"Asian",effort:["fast"],protein:"salmon",time:25,
+   tags:["high-protein","veg-forward"],
+   ing:[i("Salmon fillets","2 (6 oz)","Seafood"),i("Persian cucumbers","3","Produce"),i("Avocado","1","Produce"),i("Soy sauce","2 tbsp","Sauces & Condiments"),i("Sriracha","1 tbsp","Sauces & Condiments"),i("Mayonnaise","2 tbsp","Sauces & Condiments"),i("Rice vinegar","1 tbsp","Sauces & Condiments"),i("Jasmine rice","1 cup","Pantry & Dry Goods"),i("Sesame seeds","1 tsp","Spices & Baking")],
+   steps:["Cook rice; season with rice vinegar.","Sear or bake salmon.","Top rice with flaked salmon, cucumber, avocado, sriracha-mayo."]},
+
+  {id:"miso-salmon",name:"Miso-Glazed Salmon + Bok Choy",cuisine:"Asian",effort:["fast","one-pan"],protein:"salmon",time:25,
+   tags:["high-protein","veg-forward"],
+   ing:[i("Salmon fillets","2 (6 oz)","Seafood"),i("Baby bok choy","3 heads","Produce"),i("White miso","2 tbsp","Sauces & Condiments"),i("Honey","1 tbsp","Pantry & Dry Goods"),i("Soy sauce","1 tbsp","Sauces & Condiments"),i("Fresh ginger","1 in","Produce"),i("Jasmine rice","1 cup","Pantry & Dry Goods")],
+   steps:["Whisk miso, honey, soy, ginger; brush on salmon.","Broil salmon 8–10 min.","Sauté bok choy.","Serve over rice."]},
+
+  /* ===== AMERICAN COMFORT ===== */
+  {id:"smash-burgers",name:"Smash Burgers + Crispy Brussels",cuisine:"American",effort:["fast"],protein:"beef",time:30,
+   tags:["high-protein"],
+   ing:[i("Ground beef (80/20)","1 lb","Meat"),i("Brussels sprouts","1 lb","Produce"),i("Burger buns","4","Bakery"),i("American cheese","4 slices","Dairy & Eggs"),i("Onion","1","Produce"),i("Pickles","1 jar","Sauces & Condiments"),i("Balsamic vinegar","1 tbsp","Sauces & Condiments")],
+   steps:["Roast halved brussels 425°F 22 min, finish with balsamic.","Smash beef balls on hot skillet; cheese + onion.","Build burgers."]},
+
+  {id:"steak-broccolini",name:"Pan-Seared Steak + Garlic Broccolini",cuisine:"American",effort:["fast"],protein:"steak",time:30,
+   tags:["high-protein","veg-forward"],
+   ing:[i("Ribeye or NY strip steaks","2","Meat"),i("Broccolini","2 bunches","Produce"),i("Garlic","4 cloves","Produce"),i("Butter","3 tbsp","Dairy & Eggs"),i("Baby potatoes","1.5 lb","Produce"),i("Fresh thyme","few sprigs","Produce")],
+   steps:["Roast potatoes.","Sear steak, baste with butter, garlic, thyme; rest.","Sauté broccolini in same pan.","Plate."]},
+
+  {id:"roast-chicken-thighs",name:"One-Pan Roast Chicken Thighs + Potatoes",cuisine:"American",effort:["one-pan","involved"],protein:"chicken",time:50,
+   tags:["high-protein","sheet-pan"],
+   ing:[i("Chicken thighs (bone-in)","6","Meat"),i("Baby potatoes","1.5 lb","Produce"),i("Carrots","4","Produce"),i("Lemon","1","Produce"),i("Garlic","1 head","Produce"),i("Rosemary","few sprigs","Produce"),i("Olive oil","3 tbsp","Pantry & Dry Goods")],
+   steps:["Toss potatoes + carrots with oil on sheet pan.","Nestle chicken, season, add garlic + lemon.","Roast 425°F 40 min."]},
+
+  {id:"honey-garlic-chicken-bowl",name:"Honey-Garlic Chicken & Ranch Bowls",cuisine:"American",effort:["fast"],protein:"chicken",time:25,
+   tags:["high-protein","veg-forward","mild","low-carb"],
+   ing:[i("Chicken breast","1.25 lb","Meat"),i("Honey","2 tbsp","Pantry & Dry Goods"),i("Soy sauce","2 tbsp","Sauces & Condiments"),i("Garlic","3 cloves","Produce"),i("Romaine","1 head","Produce"),i("Celery","3 stalks","Produce"),i("Carrots","2","Produce"),i("Ranch dressing","1/2 cup","Sauces & Condiments")],
+   steps:["Sear + chop chicken; glaze with honey, soy, garlic.","Build bowls over chopped romaine + veg with ranch (add rice if you want)."]},
+
+  {id:"sausage-peppers",name:"Sheet-Pan Chicken Sausage + Peppers",cuisine:"American",effort:["one-pan","fast"],protein:"chicken",time:30,
+   tags:["high-protein","sheet-pan"],
+   ing:[i("Chicken sausage","1 pkg (4)","Meat"),i("Bell peppers","3","Produce"),i("Onion","1","Produce"),i("Baby potatoes","1 lb","Produce"),i("Olive oil","2 tbsp","Pantry & Dry Goods"),i("Italian seasoning","1 tsp","Spices & Baking")],
+   steps:["Toss everything with oil + seasoning on a sheet pan.","Roast 425°F 28 min, tossing once."]},
+
+  {id:"pork-chops-apples",name:"Pan-Seared Pork Chops + Apples",cuisine:"American",effort:["fast"],protein:"pork",time:30,
+   tags:["high-protein"],
+   ing:[i("Bone-in pork chops","2","Meat"),i("Apples","2","Produce"),i("Onion","1","Produce"),i("Butter","2 tbsp","Dairy & Eggs"),i("Dijon mustard","1 tbsp","Sauces & Condiments"),i("Chicken stock","1/2 cup","Pantry & Dry Goods"),i("Green beans","1 lb","Produce")],
+   steps:["Sear chops; rest.","Sauté apples + onion in butter.","Deglaze with stock + Dijon; sauce chops.","Steam green beans."]},
+
+  /* ===== PERSIAN ===== */
+  {id:"joojeh-kabab",name:"Joojeh Kabab (Saffron Chicken) + Rice",cuisine:"Persian",effort:["involved"],protein:"chicken",time:55,
+   tags:["high-protein"],
+   ing:[i("Chicken thighs (boneless)","1.5 lb","Meat"),i("Saffron","1 pinch","Spices & Baking"),i("Greek yogurt","1/2 cup","Dairy & Eggs"),i("Lemon","2","Produce"),i("Onion","1","Produce"),i("Basmati rice","1.5 cups","Pantry & Dry Goods"),i("Butter","2 tbsp","Dairy & Eggs")],
+   steps:["Marinate chicken in saffron, yogurt, lemon, grated onion 2+ hr.","Grill or broil until charred.","Serve with buttered basmati."]},
+
+  {id:"koobideh",name:"Beef Koobideh Kababs",cuisine:"Persian",effort:["involved"],protein:"beef",time:45,
+   tags:["high-protein"],
+   ing:[i("Ground beef (80/20)","1.5 lb","Meat"),i("Onion","1","Produce"),i("Saffron","1 pinch","Spices & Baking"),i("Sumac","1 tsp","Spices & Baking"),i("Basmati rice","1.5 cups","Pantry & Dry Goods"),i("Butter","2 tbsp","Dairy & Eggs"),i("Persian cucumbers","2","Produce")],
+   steps:["Mix beef with grated+drained onion, salt; rest 30 min.","Form on skewers; broil/grill.","Serve over basmati, dust with sumac."]},
+
+  {id:"zereshk-polo",name:"Zereshk Polo ba Morgh (Barberry Rice + Chicken)",cuisine:"Persian",effort:["involved"],protein:"chicken",time:60,
+   tags:["high-protein"],
+   ing:[i("Chicken thighs (bone-in)","6","Meat"),i("Basmati rice","1.5 cups","Pantry & Dry Goods"),i("Dried barberries (zereshk)","1/3 cup","Pantry & Dry Goods"),i("Saffron","1 pinch","Spices & Baking"),i("Onion","1","Produce"),i("Butter","3 tbsp","Dairy & Eggs"),i("Slivered almonds","2 tbsp","Spices & Baking")],
+   steps:["Braise chicken with onion + saffron.","Parboil + steam basmati.","Sauté barberries in butter; fold into rice with chicken."]},
+
+  {id:"kuku-sabzi",name:"Kuku Sabzi (Persian Herb Frittata)",cuisine:"Persian",effort:["fast"],protein:"egg",time:30,
+   tags:["veg-forward"],
+   ing:[i("Eggs","6","Dairy & Eggs"),i("Parsley","1 bunch","Produce"),i("Cilantro","1 bunch","Produce"),i("Dill","1 bunch","Produce"),i("Green onions","1 bunch","Produce"),i("Walnuts","1/4 cup","Spices & Baking"),i("Flatbread / pita","1 pkg","Bakery")],
+   steps:["Chop herbs fine; mix with beaten eggs + walnuts.","Cook low in oiled pan until set; flip.","Serve with flatbread + yogurt."]},
+
+  /* ===== TAPAS / SPANISH ===== */
+  {id:"pollo-ajillo",name:"Pollo al Ajillo (Garlic Chicken)",cuisine:"Tapas",effort:["fast"],protein:"chicken",time:30,
+   tags:["high-protein"],
+   ing:[i("Chicken thighs (boneless)","1.5 lb","Meat"),i("Garlic","1 head","Produce"),i("Dry sherry or white wine","1/2 cup","Sauces & Condiments"),i("Olive oil","1/4 cup","Pantry & Dry Goods"),i("Parsley","1 bunch","Produce"),i("Crusty bread","1 loaf","Bakery"),i("Baby potatoes","1 lb","Produce")],
+   steps:["Brown chicken in olive oil.","Add sliced garlic, deglaze with sherry; reduce.","Finish with parsley.","Serve with roasted potatoes + bread."]},
+
+  {id:"gambas-style-salmon",name:"Garlic-Paprika Salmon (Gambas-Style)",cuisine:"Tapas",effort:["fast"],protein:"salmon",time:25,
+   tags:["high-protein"],
+   ing:[i("Salmon fillets","2 (6 oz)","Seafood"),i("Garlic","5 cloves","Produce"),i("Smoked paprika","1 tsp","Spices & Baking"),i("Olive oil","1/4 cup","Pantry & Dry Goods"),i("Lemon","1","Produce"),i("Crusty bread","1 loaf","Bakery"),i("Asparagus","1 bunch","Produce")],
+   steps:["Warm olive oil with sliced garlic + paprika.","Spoon over seared salmon.","Roast asparagus; serve with bread for the oil."]},
+
+  {id:"steak-romesco",name:"Steak with Romesco + Charred Scallions",cuisine:"Tapas",effort:["involved"],protein:"steak",time:40,
+   tags:["high-protein","veg-forward"],
+   ing:[i("Flat-iron or strip steaks","2","Meat"),i("Roasted red peppers","1 jar","Pantry & Dry Goods"),i("Almonds","1/3 cup","Spices & Baking"),i("Garlic","2 cloves","Produce"),i("Sherry vinegar","1 tbsp","Sauces & Condiments"),i("Green onions","2 bunches","Produce"),i("Olive oil","1/4 cup","Pantry & Dry Goods")],
+   steps:["Blend peppers, almonds, garlic, vinegar, oil → romesco.","Sear steak; rest.","Char scallions.","Slice steak over romesco."]},
+
+  /* ===== PASTA (non-tomato) ===== */
+  {id:"cacio-pepe-chicken",name:"Cacio e Pepe with Chicken",cuisine:"Pasta",effort:["fast"],protein:"chicken",time:25,
+   tags:["high-protein"],
+   ing:[i("Spaghetti","12 oz","Pantry & Dry Goods"),i("Chicken breast","1 lb","Meat"),i("Pecorino Romano","4 oz","Dairy & Eggs"),i("Parmesan","2 oz","Dairy & Eggs"),i("Black pepper","2 tsp","Spices & Baking"),i("Butter","2 tbsp","Dairy & Eggs")],
+   steps:["Cook pasta, reserve water.","Sear + slice chicken.","Toss pasta with cheese, pepper, butter + starchy water to emulsify."]},
+
+  {id:"lemon-garlic-chicken-pasta",name:"Lemon-Garlic Chicken Pasta + Broccolini",cuisine:"Pasta",effort:["fast"],protein:"chicken",time:30,
+   tags:["high-protein","veg-forward"],
+   ing:[i("Fettuccine","12 oz","Pantry & Dry Goods"),i("Chicken breast","1.25 lb","Meat"),i("Broccolini","1 bunch","Produce"),i("Lemon","2","Produce"),i("Garlic","4 cloves","Produce"),i("Parmesan","3 oz","Dairy & Eggs"),i("Butter","3 tbsp","Dairy & Eggs"),i("Heavy cream","1/2 cup","Dairy & Eggs")],
+   steps:["Cook pasta + broccolini together last 2 min.","Sear chicken.","Make lemon-garlic butter-cream sauce; toss everything with parm."]},
+
+  {id:"pesto-salmon-pasta",name:"Pesto Salmon Pasta",cuisine:"Pasta",effort:["fast"],protein:"salmon",time:25,
+   tags:["high-protein"],
+   ing:[i("Penne","12 oz","Pantry & Dry Goods"),i("Salmon fillets","2 (6 oz)","Seafood"),i("Basil pesto","1/2 cup","Sauces & Condiments"),i("Peas","1 cup","Frozen"),i("Parmesan","2 oz","Dairy & Eggs"),i("Lemon","1","Produce")],
+   steps:["Cook penne with peas added at the end.","Bake/sear salmon; flake.","Toss pasta with pesto, fold in salmon, finish with parm + lemon."]},
+
+  {id:"brown-butter-pasta",name:"Brown-Butter Sage Pasta + Chicken",cuisine:"Pasta",effort:["fast"],protein:"chicken",time:25,
+   tags:["high-protein"],
+   ing:[i("Rigatoni","12 oz","Pantry & Dry Goods"),i("Chicken thighs (boneless)","1.25 lb","Meat"),i("Butter","4 tbsp","Dairy & Eggs"),i("Fresh sage","1 pkg","Produce"),i("Parmesan","3 oz","Dairy & Eggs"),i("Walnuts","1/4 cup","Spices & Baking")],
+   steps:["Cook pasta.","Sear + slice chicken.","Brown butter with sage; toss pasta, chicken, parm, toasted walnuts."]},
+
+  {id:"garlic-parm-broccolini-pasta",name:"Garlic-Parm Broccolini Pasta",cuisine:"Pasta",effort:["fast"],protein:"chickpea",time:25,
+   tags:["veg-forward"],
+   ing:[i("Orecchiette","12 oz","Pantry & Dry Goods"),i("Broccolini","2 bunches","Produce"),i("Chickpeas","1 can","Pantry & Dry Goods"),i("Garlic","5 cloves","Produce"),i("Parmesan","3 oz","Dairy & Eggs"),i("Red pepper flakes","1 tsp","Spices & Baking"),i("Olive oil","1/4 cup","Pantry & Dry Goods")],
+   steps:["Cook pasta.","Sauté garlic + chickpeas + broccolini in olive oil + chili flakes.","Toss with pasta, parm, starchy water."]},
+
+  /* ===== AIR-FRYER / INSTANT POT / LOWER-CARB ADDITIONS ===== */
+  {id:"af-salmon-brussels",name:"Air-Fryer Salmon Bites + Crispy Brussels",cuisine:"Asian",effort:["fast","one-pan"],protein:"salmon",time:25,
+   tags:["high-protein","low-carb","air-fryer","mild"],
+   ing:[i("Salmon fillets","2 (6 oz)","Seafood"),i("Brussels sprouts","1 lb","Produce"),i("Soy sauce","2 tbsp","Sauces & Condiments"),i("Honey","1 tbsp","Pantry & Dry Goods"),i("Garlic","2 cloves","Produce"),i("Sesame seeds","1 tsp","Spices & Baking"),i("Olive oil","2 tbsp","Pantry & Dry Goods")],
+   steps:["Cube salmon; toss with soy, honey, garlic.","Air-fry brussels 380°F 12 min.","Add salmon, air-fry 7 min more.","Sprinkle sesame."]},
+
+  {id:"af-steak-bites",name:"Air-Fryer Steak Bites + Potatoes",cuisine:"American",effort:["fast"],protein:"steak",time:30,
+   tags:["high-protein","air-fryer","mild"],
+   ing:[i("Sirloin steak","1.25 lb","Meat"),i("Baby potatoes","1.5 lb","Produce"),i("Butter","2 tbsp","Dairy & Eggs"),i("Garlic","3 cloves","Produce"),i("Fresh thyme","few sprigs","Produce"),i("Broccolini","1 bunch","Produce")],
+   steps:["Halve potatoes; air-fry 400°F 15 min.","Add cubed steak + garlic butter; air-fry 7 min.","Steam broccolini alongside."]},
+
+  {id:"af-chicken-brussels",name:"Air-Fryer Crispy Chicken Thighs + Brussels",cuisine:"American",effort:["fast","one-pan"],protein:"chicken",time:30,
+   tags:["high-protein","low-carb","air-fryer","mild"],
+   ing:[i("Chicken thighs (bone-in)","6","Meat"),i("Brussels sprouts","1 lb","Produce"),i("Garlic powder","1 tsp","Spices & Baking"),i("Smoked paprika","1 tsp","Spices & Baking"),i("Olive oil","2 tbsp","Pantry & Dry Goods"),i("Lemon","1","Produce")],
+   steps:["Season thighs; air-fry 380°F 22 min, skin up.","Add halved brussels last 12 min.","Finish with lemon."]},
+
+  {id:"korean-beef-wraps",name:"Korean Beef Lettuce Wraps",cuisine:"Asian",effort:["fast"],protein:"beef",time:20,
+   tags:["high-protein","low-carb","mild"],
+   ing:[i("Ground beef (90/10)","1 lb","Meat"),i("Butter lettuce","2 heads","Produce"),i("Soy sauce","3 tbsp","Sauces & Condiments"),i("Honey","1 tbsp","Pantry & Dry Goods"),i("Garlic","3 cloves","Produce"),i("Fresh ginger","1 in","Produce"),i("Green onions","1 bunch","Produce"),i("Persian cucumbers","2","Produce"),i("Sesame oil","1 tbsp","Sauces & Condiments")],
+   steps:["Brown beef with garlic + ginger.","Glaze with soy, honey, sesame oil.","Spoon into lettuce cups; top cucumber + green onion."]},
+
+  {id:"ip-shredded-chicken",name:"Instant Pot Shredded Chicken Bowls",cuisine:"American",effort:["fast","involved"],protein:"chicken",time:35,
+   tags:["high-protein","instant-pot","mild","batch"],
+   ing:[i("Chicken breast","2 lb","Meat"),i("Chicken stock","1 cup","Pantry & Dry Goods"),i("Garlic","3 cloves","Produce"),i("Smoked paprika","1 tsp","Spices & Baking"),i("Jasmine rice","1 cup","Pantry & Dry Goods"),i("Romaine","1 head","Produce"),i("Avocado","1","Produce"),i("Lime","1","Produce")],
+   steps:["Pressure-cook chicken with stock, garlic, paprika 12 min.","Shred.","Serve over rice or greens with avocado + lime (great for leftovers)."]},
+
+  {id:"steak-cobb",name:"Steak Cobb Salad",cuisine:"American",effort:["fast"],protein:"steak",time:25,
+   tags:["high-protein","low-carb","mild"],
+   ing:[i("Sirloin or flat-iron steak","1 lb","Meat"),i("Romaine","2 hearts","Produce"),i("Eggs","3","Dairy & Eggs"),i("Bacon","4 slices","Meat"),i("Avocado","1","Produce"),i("Blue cheese or feta","3 oz","Dairy & Eggs"),i("Ranch or vinaigrette","1/2 cup","Sauces & Condiments")],
+   steps:["Sear steak; rest + slice.","Hard-boil eggs; crisp bacon.","Build salad; arrange rows; dress."]},
+
+  {id:"shirazi-kabab",name:"Chicken Kabab + Shirazi Salad",cuisine:"Persian",effort:["fast"],protein:"chicken",time:30,
+   tags:["high-protein","low-carb","mild"],
+   ing:[i("Chicken thighs (boneless)","1.5 lb","Meat"),i("Greek yogurt","1/3 cup","Dairy & Eggs"),i("Lemon","2","Produce"),i("Persian cucumbers","3","Produce"),i("Tomato","2","Produce"),i("Onion","1","Produce"),i("Mint","1 bunch","Produce"),i("Olive oil","2 tbsp","Pantry & Dry Goods")],
+   steps:["Marinate chicken in yogurt + lemon; broil or air-fry.","Dice cucumber, tomato, onion fine for shirazi; dress with lemon + oil + mint."]}
+];
+
+const CUISINES = [...new Set(RECIPES.map(r=>r.cuisine))];
+const EFFORTS = [{k:"fast",label:"Fast (~30m)"},{k:"one-pan",label:"One-pan"},{k:"involved",label:"Involved OK"}];
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+/* ---------- state ---------- */
+const state = { cuisines:new Set(CUISINES), efforts:new Set(), plan:[] };
+
+/* ---------- build chips ---------- */
+function renderChips(){
+  const c = document.getElementById("cuisineChips"); c.innerHTML="";
+  CUISINES.forEach(cu=>{
+    const el=document.createElement("div");
+    el.className="chip"+(state.cuisines.has(cu)?" on":"");
+    el.textContent=cu;
+    el.onclick=()=>{ state.cuisines.has(cu)?state.cuisines.delete(cu):state.cuisines.add(cu); renderChips(); };
+    c.appendChild(el);
+  });
+  const e = document.getElementById("effortChips"); e.innerHTML="";
+  EFFORTS.forEach(ef=>{
+    const el=document.createElement("div");
+    el.className="chip"+(state.efforts.has(ef.k)?" on":"");
+    el.textContent=ef.label;
+    el.onclick=()=>{ state.efforts.has(ef.k)?state.efforts.delete(ef.k):state.efforts.add(ef.k); renderChips(); };
+    e.appendChild(el);
+  });
+}
+
+/* ---------- generation ---------- */
+function pool(){
+  return RECIPES.filter(r=>
+    state.cuisines.has(r.cuisine) &&
+    (state.efforts.size===0 || r.effort.some(x=>state.efforts.has(x)))
+  );
+}
+function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+function generate(){
+  const n=+document.getElementById("count").value;
+  let p=shuffle(pool());
+  const picked=[]; const proteinCount={};
+  // pass 1: variety — avoid >2 of same protein
+  for(const r of p){ if(picked.length>=n) break;
+    const c=proteinCount[r.protein]||0; if(c<2){picked.push(r);proteinCount[r.protein]=c+1;}
+  }
+  // pass 2: fill remainder if short
+  for(const r of p){ if(picked.length>=n) break; if(!picked.includes(r)) picked.push(r); }
+  state.plan=picked.slice(0,n);
+  if(state.plan.length<n){
+    document.getElementById("status").textContent=`Only ${state.plan.length} recipes match — enable more cuisines/effort for ${n}.`;
+  } else { document.getElementById("status").textContent=""; }
+  renderPlan(); renderList(); savePlan();
+}
+
+function swap(idx){
+  const used=new Set(state.plan.map(r=>r.id));
+  const options=shuffle(pool()).filter(r=>!used.has(r.id));
+  if(options.length){ state.plan[idx]=options[0]; renderPlan(); renderList(); savePlan(); }
+}
+
+/* ---------- render plan ---------- */
+function renderPlan(){
+  const m=document.getElementById("meals");
+  if(!state.plan.length){m.innerHTML='<div class="empty">Tap <b>Generate week</b> to build your plan.</div>';return;}
+  m.innerHTML="";
+  state.plan.forEach((r,idx)=>{
+    const d=document.createElement("div"); d.className="meal";
+    d.innerHTML=`
+      <button class="swap" data-i="${idx}">↻ swap</button>
+      <div class="day">${DAYS[idx]||"Extra"}</div>
+      <div class="name">${r.name}</div>
+      <div class="tags">
+        <span class="tag">${r.cuisine}</span>
+        <span class="tag">${r.time} min</span>
+        ${r.tags.map(t=>`<span class="tag">${t}</span>`).join("")}
+      </div>
+      <details class="recipe">
+        <summary>Recipe & ingredients</summary>
+        <ul>${r.ing.map(x=>`<li>${x.qty} ${x.name}</li>`).join("")}</ul>
+        <ol>${r.steps.map(s=>`<li>${s}</li>`).join("")}</ol>
+      </details>`;
+    m.appendChild(d);
+  });
+  m.querySelectorAll(".swap").forEach(b=>b.onclick=()=>swap(+b.dataset.i));
+}
+
+/* ---------- consolidate + render grocery list ---------- */
+function renderList(){
+  const l=document.getElementById("list");
+  if(!state.plan.length){l.innerHTML='<div class="empty">Your consolidated shopping list will appear here.</div>';document.getElementById("listCount").textContent="";return;}
+  // merge ingredients by name (case-insensitive)
+  const map=new Map();
+  state.plan.forEach(r=>r.ing.forEach(x=>{
+    const key=x.name.toLowerCase();
+    if(!map.has(key)) map.set(key,{name:x.name,aisle:x.aisle,qtys:[]});
+    map.get(key).qtys.push(x.qty);
+  }));
+  // group by aisle
+  const byAisle={};
+  map.forEach(v=>{ (byAisle[v.aisle]=byAisle[v.aisle]||[]).push(v); });
+  l.innerHTML=""; let count=0;
+  AISLE_ORDER.forEach(a=>{
+    if(!byAisle[a]) return;
+    const items=byAisle[a].sort((x,y)=>x.name.localeCompare(y.name));
+    const sec=document.createElement("div"); sec.className="aisle";
+    sec.innerHTML=`<h3>${a}</h3>`;
+    items.forEach(v=>{
+      count++;
+      const qty = v.qtys.length>1 ? v.qtys.join(" + ") : v.qtys[0];
+      const id="chk"+(count);
+      const row=document.createElement("div"); row.className="item";
+      row.innerHTML=`
+        <input type="checkbox" id="${id}">
+        <label for="${id}"><b>${v.name}</b> <span class="q">— ${qty}</span></label>
+        <a href="${heb(v.name)}" target="_blank" rel="noopener">HEB ↗</a>`;
+      const cb=row.querySelector("input");
+      cb.onchange=()=>row.classList.toggle("checked",cb.checked);
+      sec.appendChild(row);
+    });
+    l.appendChild(sec);
+  });
+  document.getElementById("listCount").textContent=`${count} items`;
+}
+
+/* ---------- copy list ---------- */
+function copyList(){
+  if(!state.plan.length) return;
+  const map=new Map();
+  state.plan.forEach(r=>r.ing.forEach(x=>{
+    const k=x.name.toLowerCase();
+    if(!map.has(k)) map.set(k,{name:x.name,aisle:x.aisle,qtys:[]});
+    map.get(k).qtys.push(x.qty);
+  }));
+  const byAisle={}; map.forEach(v=>{(byAisle[v.aisle]=byAisle[v.aisle]||[]).push(v);});
+  let out="HEB GROCERY LIST\n\n";
+  AISLE_ORDER.forEach(a=>{ if(!byAisle[a])return;
+    out+=a.toUpperCase()+"\n";
+    byAisle[a].sort((x,y)=>x.name.localeCompare(y.name)).forEach(v=>{
+      out+="  [ ] "+v.name+" — "+(v.qtys.length>1?v.qtys.join(" + "):v.qtys[0])+"\n";
+    });
+    out+="\n";
+  });
+  navigator.clipboard.writeText(out).then(()=>{
+    document.getElementById("status").textContent="Grocery list copied ✓";
+    setTimeout(()=>document.getElementById("status").textContent="",2500);
+  });
+}
+
+/* ---------- persistence (plan survives reload; only changes on Generate/swap) ---------- */
+function savePlan(){ try{ localStorage.setItem('mealPlanIds', JSON.stringify(state.plan.map(r=>r.id))); }catch(e){} }
+function restoreOrGenerate(){
+  let ids=null;
+  try{ ids=JSON.parse(localStorage.getItem('mealPlanIds')||'null'); }catch(e){}
+  if(ids&&ids.length){
+    state.plan=ids.map(id=>RECIPES.find(r=>r.id===id)).filter(Boolean);
+    if(state.plan.length){ renderPlan(); renderList(); return; }
+  }
+  generate();
+}
+
+/* ---------- wire up ---------- */
+document.getElementById("genBtn").onclick=generate;
+document.getElementById("printBtn").onclick=()=>window.print();
+document.getElementById("copyBtn").onclick=copyList;
+renderChips();
+restoreOrGenerate();
+</script>
+</body>
+</html>
