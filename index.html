@@ -43,6 +43,8 @@
   .meal a.rl{color:var(--accent2);font-size:12px;text-decoration:none}
   .meal a.rl:hover{text-decoration:underline}
   .meal .swap{float:right;font-size:12px;background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:7px;padding:3px 8px;cursor:pointer}
+  .meal .fav{float:right;font-size:12px;background:transparent;border:1px solid var(--line);color:#e0b341;border-radius:7px;padding:3px 8px;cursor:pointer;margin-left:6px}
+  .sync{font-size:11px;color:var(--accent2);margin-left:8px}
   details.recipe{margin-top:8px}
   details.recipe summary{cursor:pointer;color:var(--muted);font-size:12px}
   details.recipe ol{margin:8px 0 0 18px;padding:0;color:var(--text);font-size:13px}
@@ -121,7 +123,14 @@
 </div>
 <footer>HEB has no public cart API, so each item links to an HEB search you tap to add. Cart automation can be layered on later.</footer>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+/* ---------- Supabase cloud sync ---------- */
+const SUPA_URL="https://fnjtuxfxlntdrrrsweez.supabase.co";
+const SUPA_KEY="sb_publishable_KtKCQ-KY5Ey17kb4NeSoag_Tk35PDIU";
+const db=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SUPA_URL,SUPA_KEY):null;
+let groceryState={}; let favorites=new Set(); let applyingRemote=false;
+
 /* ---------- HEB aisle order ---------- */
 const AISLE_ORDER = ["Produce","Meat","Seafood","Dairy & Eggs","Pantry & Dry Goods","Spices & Baking","Sauces & Condiments","Frozen","Bakery","Other"];
 const heb = q => "https://www.heb.com/search/?q=" + encodeURIComponent(q);
@@ -365,6 +374,7 @@ function renderPlan(){
     const d=document.createElement("div"); d.className="meal";
     d.innerHTML=`
       <button class="swap" data-i="${idx}">↻ swap</button>
+      <button class="fav" data-id="${r.id}">${favorites.has(r.id)?'★ saved':'☆ save'}</button>
       <div class="day">${DAYS[idx]||"Extra"}</div>
       <div class="name">${r.name}</div>
       <div class="tags">
@@ -380,6 +390,7 @@ function renderPlan(){
     m.appendChild(d);
   });
   m.querySelectorAll(".swap").forEach(b=>b.onclick=()=>swap(+b.dataset.i));
+  m.querySelectorAll(".fav").forEach(b=>b.onclick=()=>toggleFav(b.dataset.id));
 }
 
 /* ---------- consolidate + render grocery list ---------- */
@@ -406,13 +417,15 @@ function renderList(){
       count++;
       const qty = v.qtys.length>1 ? v.qtys.join(" + ") : v.qtys[0];
       const id="chk"+(count);
+      const nm=v.name;
       const row=document.createElement("div"); row.className="item";
       row.innerHTML=`
         <input type="checkbox" id="${id}">
-        <label for="${id}"><b>${v.name}</b> <span class="q">— ${qty}</span></label>
-        <a href="${heb(v.name)}" target="_blank" rel="noopener">HEB ↗</a>`;
+        <label for="${id}"><b>${nm}</b> <span class="q">— ${qty}</span></label>
+        <a href="${heb(nm)}" target="_blank" rel="noopener">HEB ↗</a>`;
       const cb=row.querySelector("input");
-      cb.onchange=()=>row.classList.toggle("checked",cb.checked);
+      if(groceryState[nm]){ cb.checked=true; row.classList.add("checked"); }
+      cb.onchange=()=>{ row.classList.toggle("checked",cb.checked); groceryState[nm]=cb.checked; saveCheck(nm,cb.checked); };
       sec.appendChild(row);
     });
     l.appendChild(sec);
@@ -444,16 +457,70 @@ function copyList(){
   });
 }
 
-/* ---------- persistence (plan survives reload; only changes on Generate/swap) ---------- */
-function savePlan(){ try{ localStorage.setItem('mealPlanIds', JSON.stringify(state.plan.map(r=>r.id))); }catch(e){} }
-function restoreOrGenerate(){
-  let ids=null;
-  try{ ids=JSON.parse(localStorage.getItem('mealPlanIds')||'null'); }catch(e){}
-  if(ids&&ids.length){
-    state.plan=ids.map(id=>RECIPES.find(r=>r.id===id)).filter(Boolean);
-    if(state.plan.length){ renderPlan(); renderList(); return; }
+/* ---------- persistence: Supabase cloud sync (localStorage fallback offline) ---------- */
+function planIds(){ return state.plan.map(r=>r.id); }
+async function savePlan(){
+  try{ localStorage.setItem('mealPlanIds', JSON.stringify(planIds())); }catch(e){}
+  if(applyingRemote||!db) return;
+  try{ await db.from('meal_plan').upsert({id:1, recipe_ids:planIds(), updated_at:new Date().toISOString()}); }catch(e){}
+}
+async function saveCheck(name,got){
+  if(applyingRemote||!db) return;
+  try{ await db.from('grocery_checks').upsert({name, got_it:got, updated_at:new Date().toISOString()}); }catch(e){}
+}
+async function toggleFav(id){
+  if(favorites.has(id)) favorites.delete(id); else favorites.add(id);
+  renderPlan();
+  if(!db) return;
+  try{
+    if(favorites.has(id)) await db.from('favorites').upsert({recipe_id:id});
+    else await db.from('favorites').delete().eq('recipe_id', id);
+  }catch(e){}
+}
+function applyPlanIds(ids){
+  const p=(ids||[]).map(id=>RECIPES.find(r=>r.id===id)).filter(Boolean);
+  if(p.length){ state.plan=p; renderPlan(); renderList(); return true; }
+  return false;
+}
+async function loadFromCloud(){
+  let restored=false;
+  if(db){
+    try{
+      const [mpRes,gcRes,fvRes]=await Promise.all([
+        db.from('meal_plan').select('recipe_ids').eq('id',1).maybeSingle(),
+        db.from('grocery_checks').select('name,got_it'),
+        db.from('favorites').select('recipe_id')
+      ]);
+      if(gcRes.data){ groceryState={}; gcRes.data.forEach(r=>{ if(r.got_it) groceryState[r.name]=true; }); }
+      if(fvRes.data){ favorites=new Set(fvRes.data.map(r=>r.recipe_id)); }
+      if(mpRes.data && mpRes.data.recipe_ids && mpRes.data.recipe_ids.length){ restored=applyPlanIds(mpRes.data.recipe_ids); }
+    }catch(e){}
+    subscribeRealtime();
+    const s=document.getElementById("status"); if(s){ s.innerHTML='<span class="sync">☁ synced across your devices</span>'; }
   }
-  generate();
+  if(!restored){
+    let ids=null; try{ ids=JSON.parse(localStorage.getItem('mealPlanIds')||'null'); }catch(e){}
+    if(!(ids&&applyPlanIds(ids))) generate();
+  }
+}
+function subscribeRealtime(){
+  if(!db) return;
+  db.channel('kitchen')
+    .on('postgres_changes',{event:'*',schema:'public',table:'meal_plan'}, p=>{
+      const ids=p.new&&p.new.recipe_ids;
+      if(ids && JSON.stringify(ids)!==JSON.stringify(planIds())){ applyingRemote=true; applyPlanIds(ids); applyingRemote=false; }
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'grocery_checks'}, p=>{
+      const r=p.new||p.old; if(!r) return; applyingRemote=true;
+      if(p.eventType==='DELETE'||!r.got_it){ delete groceryState[r.name]; } else { groceryState[r.name]=true; }
+      renderList(); applyingRemote=false;
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'favorites'}, p=>{
+      const r=p.new||p.old; if(!r) return; applyingRemote=true;
+      if(p.eventType==='DELETE') favorites.delete(r.recipe_id); else favorites.add(r.recipe_id);
+      renderPlan(); applyingRemote=false;
+    })
+    .subscribe();
 }
 
 /* ---------- wire up ---------- */
@@ -461,7 +528,7 @@ document.getElementById("genBtn").onclick=generate;
 document.getElementById("printBtn").onclick=()=>window.print();
 document.getElementById("copyBtn").onclick=copyList;
 renderChips();
-restoreOrGenerate();
+loadFromCloud();
 </script>
 </body>
 </html>
