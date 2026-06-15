@@ -61,6 +61,19 @@
   .listhead{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;gap:8px;flex-wrap:wrap}
   .listhead .n{font-size:12px;color:var(--muted)}
   .empty{padding:40px 16px;text-align:center;color:var(--muted)}
+  .who{display:flex;gap:6px;align-items:center;padding:10px 16px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line)}
+  .taskadd{display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .taskadd input{flex:1;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font:inherit}
+  .taskrow{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--line)}
+  .taskrow:last-child{border-bottom:none}
+  .taskrow input[type=checkbox]{width:16px;height:16px;accent-color:var(--good)}
+  .taskrow .t{flex:1;font-size:14px}
+  .taskrow.done .t{text-decoration:line-through;color:var(--muted)}
+  .taskrow .by{font-size:11px;color:var(--muted)}
+  .taskrow .del{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px}
+  .taskrow .del:hover{color:var(--accent)}
+  .cal iframe{width:100%;height:440px;border:0;display:block;background:#fff;border-radius:0 0 14px 14px}
+  .calnote{padding:10px 16px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--line)}
   footer{color:var(--muted);font-size:12px;text-align:center;padding:24px}
   @media print{
     body{background:#fff;color:#000}
@@ -118,6 +131,23 @@
         <span class="n" id="listCount"></span>
       </div>
       <div id="list"><div class="empty">Your consolidated shopping list will appear here.</div></div>
+    </div>
+  </div>
+  <div class="grid" style="margin-top:18px">
+    <div class="card">
+      <h2>Shared tasks</h2>
+      <div class="who">I'm: <span class="chip" id="whoJD">JD</span><span class="chip" id="whoCh">Chayslyn</span></div>
+      <div class="taskadd">
+        <input id="taskInput" placeholder="Add a task… then press Enter">
+        <button class="btn" id="taskAdd">Add</button>
+      </div>
+      <div id="tasks"><div class="empty">No tasks yet.</div></div>
+    </div>
+    <div class="card cal">
+      <h2>Calendar</h2>
+      <div class="calnote">Shows JD's Google Calendar. Visible when this device is signed into that Google account (or the calendar is shared public). Tell me Chayslyn's calendar address to merge hers in.</div>
+      <iframe id="calFrame" loading="lazy"
+        src="https://calendar.google.com/calendar/embed?src=j.david.escobedo%40gmail.com&ctz=America%2FChicago&mode=AGENDA&showTitle=0&showPrint=0&showTabs=0&showCalendars=0&showTz=0"></iframe>
     </div>
   </div>
 </div>
@@ -520,15 +550,59 @@ function subscribeRealtime(){
       if(p.eventType==='DELETE') favorites.delete(r.recipe_id); else favorites.add(r.recipe_id);
       renderPlan(); applyingRemote=false;
     })
+    .on('postgres_changes',{event:'*',schema:'public',table:'tasks'}, ()=>{ loadTasks(); })
     .subscribe();
 }
+
+/* ---------- shared tasks ---------- */
+let whoami=(()=>{ try{return localStorage.getItem('whoami')||'JD';}catch(e){return 'JD';} })();
+let tasks=[];
+function renderWho(){
+  const j=document.getElementById('whoJD'), c=document.getElementById('whoCh'); if(!j||!c) return;
+  j.className='chip'+(whoami==='JD'?' on':''); c.className='chip'+(whoami==='Chayslyn'?' on':'');
+}
+function setWho(w){ whoami=w; try{localStorage.setItem('whoami',w);}catch(e){} renderWho(); }
+async function loadTasks(){
+  if(db){ try{ const {data}=await db.from('tasks').select('*').order('created_at',{ascending:true}); tasks=data||[]; }catch(e){} }
+  renderTasks();
+}
+function renderTasks(){
+  const el=document.getElementById('tasks'); if(!el) return;
+  if(!tasks.length){ el.innerHTML='<div class="empty">No tasks yet.</div>'; return; }
+  el.innerHTML='';
+  tasks.forEach(t=>{
+    const row=document.createElement('div'); row.className='taskrow'+(t.done?' done':'');
+    const safe=(t.title||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    row.innerHTML=`<input type="checkbox" ${t.done?'checked':''}>
+      <span class="t">${safe}</span>
+      <span class="by">${t.created_by||''}</span>
+      <button class="del" title="delete">✕</button>`;
+    row.querySelector('input').onchange=e=>toggleTask(t.id,e.target.checked);
+    row.querySelector('.del').onclick=()=>deleteTask(t.id);
+    el.appendChild(row);
+  });
+}
+async function addTask(){
+  const inp=document.getElementById('taskInput'); const title=(inp.value||'').trim(); if(!title) return;
+  inp.value='';
+  if(db){ try{ await db.from('tasks').insert({title, created_by:whoami}); await loadTasks(); }catch(e){} }
+  else { tasks.push({id:'local'+Date.now(),title,created_by:whoami,done:false}); renderTasks(); }
+}
+async function toggleTask(id,done){ const t=tasks.find(x=>x.id===id); if(t)t.done=done; renderTasks(); if(db){ try{ await db.from('tasks').update({done}).eq('id',id); }catch(e){} } }
+async function deleteTask(id){ tasks=tasks.filter(x=>x.id!==id); renderTasks(); if(db){ try{ await db.from('tasks').delete().eq('id',id); }catch(e){} } }
 
 /* ---------- wire up ---------- */
 document.getElementById("genBtn").onclick=generate;
 document.getElementById("printBtn").onclick=()=>window.print();
 document.getElementById("copyBtn").onclick=copyList;
+document.getElementById("taskAdd").onclick=addTask;
+document.getElementById("taskInput").addEventListener("keydown",e=>{ if(e.key==="Enter") addTask(); });
+document.getElementById("whoJD").onclick=()=>setWho("JD");
+document.getElementById("whoCh").onclick=()=>setWho("Chayslyn");
+renderWho();
 renderChips();
 loadFromCloud();
+loadTasks();
 </script>
 </body>
 </html>
