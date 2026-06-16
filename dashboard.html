@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Kitchen Dashboard</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1f232c; --line:#2a2f3a;
+    --text:#e8eaed; --muted:#9aa3b2; --accent:#e0492f; --accent2:#3a7d5d; --good:#3a7d5d; --gold:#e0b341;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;user-select:none}
+  a{color:var(--accent2);text-decoration:none}
+  .dash{height:100vh;display:flex;flex-direction:column;gap:14px;padding:16px}
+  /* top bar */
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+  .clock{font-size:60px;font-weight:800;line-height:1;letter-spacing:-1px}
+  .date{font-size:18px;color:var(--muted);margin-top:4px}
+  .wx{text-align:right;line-height:1.2}
+  .wx .now{font-size:40px;font-weight:800}
+  .wx .desc{font-size:15px;color:var(--muted)}
+  .wx .hl{font-size:14px;color:var(--muted)}
+  .sync{font-size:12px;color:var(--accent2);margin-top:6px}
+  /* body grid */
+  .body{flex:1;display:grid;grid-template-columns:1.1fr .9fr 1fr;gap:14px;min-height:0}
+  .col{display:flex;flex-direction:column;gap:14px;min-height:0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .card>h2{margin:0;padding:12px 16px;border-bottom:1px solid var(--line);font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);flex:none}
+  .card .inner{padding:14px 16px;overflow:auto;min-height:0}
+  /* tonight */
+  .tonight{flex:none}
+  .tonight .name{font-size:30px;font-weight:800;line-height:1.1;margin:2px 0 8px}
+  .tonight .tags{display:flex;flex-wrap:wrap;gap:6px}
+  .tag{font-size:12px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:6px;padding:3px 8px}
+  .tomorrow{margin-top:12px;font-size:14px;color:var(--muted)}
+  .tomorrow b{color:var(--text)}
+  details.rec{margin-top:12px}
+  details.rec summary{cursor:pointer;color:var(--accent2);font-size:13px}
+  details.rec ul{margin:8px 0 0 18px;padding:0;color:var(--muted);font-size:13px}
+  details.rec ol{margin:8px 0 0 18px;padding:0;color:var(--text);font-size:13px}
+  /* week */
+  .week{flex:1}
+  .wk{display:flex;align-items:baseline;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .wk:last-child{border-bottom:none}
+  .wk .d{font-size:11px;font-weight:700;color:var(--muted);width:34px;text-transform:uppercase;flex:none}
+  .wk .n{font-size:15px}
+  .wk.today{background:rgba(224,73,47,.10);margin:0 -16px;padding:8px 16px;border-radius:8px}
+  .wk.today .d{color:var(--accent)}
+  .wk.today .n{font-weight:700}
+  /* tasks */
+  .tasks{flex:1}
+  .who{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);padding:10px 16px;border-bottom:1px solid var(--line);flex:none}
+  .chip{background:var(--chip,#262b35);border:1px solid var(--line);color:var(--text);border-radius:999px;padding:4px 12px;font-size:13px;cursor:pointer}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .taskadd{display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);flex:none}
+  .taskadd input{flex:1;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:inherit}
+  .taskadd button{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer}
+  .tlist{overflow:auto;min-height:0}
+  .trow{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .trow:last-child{border-bottom:none}
+  .trow input[type=checkbox]{width:22px;height:22px;accent-color:var(--good);flex:none}
+  .trow .t{flex:1;font-size:16px}
+  .trow.done .t{text-decoration:line-through;color:var(--muted)}
+  .trow .by{font-size:11px;color:var(--muted)}
+  .trow .del{background:transparent;border:none;color:var(--muted);font-size:16px;cursor:pointer}
+  .empty{padding:28px 16px;text-align:center;color:var(--muted)}
+  /* calendar */
+  .calcard{min-height:0}
+  .calnote{padding:8px 14px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--line);flex:none}
+  .calcard iframe{flex:1;width:100%;border:0;background:#fff;min-height:0}
+  /* phone fallback */
+  @media (max-width:900px){
+    .dash{height:auto}
+    .body{grid-template-columns:1fr}
+    .calcard iframe{height:360px;flex:none}
+    .clock{font-size:48px}
+  }
+</style>
+</head>
+<body>
+<div class="dash">
+  <div class="top">
+    <div>
+      <div class="clock" id="clock">--:--</div>
+      <div class="date" id="date">—</div>
+    </div>
+    <div class="wx" id="wx"><div class="now">—</div><div class="desc">loading weather…</div></div>
+  </div>
+
+  <div class="body">
+    <div class="col">
+      <div class="card tonight">
+        <h2>Tonight's dinner</h2>
+        <div class="inner">
+          <div class="name" id="tonightName">—</div>
+          <div class="tags" id="tonightTags"></div>
+          <div class="tomorrow" id="tomorrow"></div>
+          <details class="rec" id="tonightRec" style="display:none">
+            <summary>Ingredients &amp; recipe</summary>
+            <ul id="tonightIng"></ul>
+            <ol id="tonightSteps"></ol>
+          </details>
+        </div>
+      </div>
+      <div class="card week">
+        <h2>This week</h2>
+        <div class="inner" id="week"></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card tasks">
+        <h2>Shared tasks <span class="sync" id="sync" style="float:right;margin:0"></span></h2>
+        <div class="who">I'm: <span class="chip" id="whoJD">JD</span><span class="chip" id="whoCh">Chayslyn</span></div>
+        <div class="taskadd">
+          <input id="taskInput" placeholder="Add a task…">
+          <button id="taskAdd">Add</button>
+        </div>
+        <div class="tlist" id="tasks"><div class="empty">No tasks yet.</div></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card calcard" style="flex:1">
+        <h2>Calendar</h2>
+        <div class="calnote">Shows when this iPad is signed into the household Google account.</div>
+        <iframe id="cal" loading="lazy"
+          src="https://calendar.google.com/calendar/embed?src=j.david.escobedo%40gmail.com&ctz=America%2FChicago&mode=AGENDA&showTitle=0&showPrint=0&showTabs=0&showCalendars=0&showTz=0&bgcolor=%23ffffff"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="recipes.js"></script>
+<script>
+const SUPA_URL="https://fnjtuxfxlntdrrrsweez.supabase.co";
+const SUPA_KEY="sb_publishable_KtKCQ-KY5Ey17kb4NeSoag_Tk35PDIU";
+const db=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SUPA_URL,SUPA_KEY):null;
+const RECIPES=window.RECIPES||[];
+const byId=id=>RECIPES.find(r=>r.id===id);
+const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const todayIdx=()=>(new Date().getDay()+6)%7; // Mon=0 .. Sun=6
+let planIds=[]; let tasks=[];
+let whoami=(()=>{try{return localStorage.getItem('whoami')||'JD';}catch(e){return 'JD';}})();
+
+/* ---------- clock ---------- */
+function tick(){
+  const d=new Date();
+  document.getElementById('clock').textContent=d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+  document.getElementById('date').textContent=d.toLocaleDateString([], {weekday:'long',month:'long',day:'numeric'});
+}
+tick(); setInterval(tick,15000);
+
+/* ---------- weather (open-meteo, no key) ---------- */
+const WX={0:['Clear','☀️'],1:['Mostly clear','🌤️'],2:['Partly cloudy','⛅'],3:['Cloudy','☁️'],45:['Fog','🌫️'],48:['Fog','🌫️'],51:['Drizzle','🌦️'],53:['Drizzle','🌦️'],55:['Drizzle','🌦️'],61:['Rain','🌧️'],63:['Rain','🌧️'],65:['Heavy rain','🌧️'],71:['Snow','❄️'],73:['Snow','❄️'],75:['Snow','❄️'],80:['Showers','🌦️'],81:['Showers','🌦️'],82:['Showers','🌧️'],95:['Storms','⛈️'],96:['Storms','⛈️'],99:['Storms','⛈️']};
+async function loadWeather(){
+  try{
+    const u="https://api.open-meteo.com/v1/forecast?latitude=29.97&longitude=-95.69&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&timezone=auto";
+    const r=await fetch(u); const j=await r.json();
+    const c=j.current, code=WX[c.weather_code]||['',''];
+    document.getElementById('wx').innerHTML=
+      `<div class="now">${Math.round(c.temperature_2m)}° ${code[1]}</div>`+
+      `<div class="desc">${code[0]}</div>`+
+      `<div class="hl">H ${Math.round(j.daily.temperature_2m_max[0])}° · L ${Math.round(j.daily.temperature_2m_min[0])}°</div>`;
+  }catch(e){ document.getElementById('wx').style.display='none'; }
+}
+loadWeather(); setInterval(loadWeather,1800000);
+
+/* ---------- meal plan ---------- */
+function renderPlan(){
+  const i=todayIdx();
+  const t=byId(planIds[i]);
+  document.getElementById('tonightName').textContent = t?t.name:'No plan set';
+  document.getElementById('tonightTags').innerHTML = t?[t.cuisine,t.time+' min',...t.tags].map(x=>`<span class="tag">${x}</span>`).join(''):'';
+  const tm=byId(planIds[(i+1)%7]);
+  document.getElementById('tomorrow').innerHTML = tm?`Tomorrow: <b>${tm.name}</b>`:'';
+  const rec=document.getElementById('tonightRec');
+  if(t){ rec.style.display='';
+    document.getElementById('tonightIng').innerHTML=t.ing.map(x=>`<li>${x.qty} ${x.name}</li>`).join('');
+    document.getElementById('tonightSteps').innerHTML=t.steps.map(s=>`<li>${s}</li>`).join('');
+  } else rec.style.display='none';
+  const w=document.getElementById('week'); w.innerHTML='';
+  for(let k=0;k<7;k++){
+    const r=byId(planIds[k]);
+    const row=document.createElement('div'); row.className='wk'+(k===i?' today':'');
+    row.innerHTML=`<span class="d">${DAYS[k]}</span><span class="n">${r?r.name:'—'}</span>`;
+    w.appendChild(row);
+  }
+}
+async function loadPlan(){
+  if(db){ try{ const {data}=await db.from('meal_plan').select('recipe_ids').eq('id',1).maybeSingle(); planIds=(data&&data.recipe_ids)||[]; }catch(e){} }
+  renderPlan();
+}
+
+/* ---------- tasks ---------- */
+function renderWho(){ document.getElementById('whoJD').className='chip'+(whoami==='JD'?' on':''); document.getElementById('whoCh').className='chip'+(whoami==='Chayslyn'?' on':''); }
+function setWho(w){ whoami=w; try{localStorage.setItem('whoami',w);}catch(e){} renderWho(); }
+function renderTasks(){
+  const el=document.getElementById('tasks');
+  if(!tasks.length){ el.innerHTML='<div class="empty">No tasks yet.</div>'; return; }
+  el.innerHTML='';
+  tasks.forEach(t=>{
+    const row=document.createElement('div'); row.className='trow'+(t.done?' done':'');
+    const safe=(t.title||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    row.innerHTML=`<input type="checkbox" ${t.done?'checked':''}><span class="t">${safe}</span><span class="by">${t.created_by||''}</span><button class="del">✕</button>`;
+    row.querySelector('input').onchange=e=>toggleTask(t.id,e.target.checked);
+    row.querySelector('.del').onclick=()=>deleteTask(t.id);
+    el.appendChild(row);
+  });
+}
+async function loadTasks(){ if(db){ try{ const {data}=await db.from('tasks').select('*').order('created_at',{ascending:true}); tasks=data||[]; }catch(e){} } renderTasks(); }
+async function addTask(){ const inp=document.getElementById('taskInput'); const title=(inp.value||'').trim(); if(!title) return; inp.value=''; if(db){ try{ await db.from('tasks').insert({title,created_by:whoami}); await loadTasks(); }catch(e){} } }
+async function toggleTask(id,done){ const t=tasks.find(x=>x.id===id); if(t)t.done=done; renderTasks(); if(db){ try{ await db.from('tasks').update({done}).eq('id',id); }catch(e){} } }
+async function deleteTask(id){ tasks=tasks.filter(x=>x.id!==id); renderTasks(); if(db){ try{ await db.from('tasks').delete().eq('id',id); }catch(e){} } }
+
+/* ---------- realtime ---------- */
+function subscribe(){
+  if(!db) return;
+  db.channel('dash')
+    .on('postgres_changes',{event:'*',schema:'public',table:'meal_plan'}, p=>{ if(p.new&&p.new.recipe_ids){ planIds=p.new.recipe_ids; renderPlan(); } })
+    .on('postgres_changes',{event:'*',schema:'public',table:'tasks'}, ()=>loadTasks())
+    .subscribe();
+  document.getElementById('sync').textContent='☁ live';
+}
+
+/* ---------- wire ---------- */
+document.getElementById('taskAdd').onclick=addTask;
+document.getElementById('taskInput').addEventListener('keydown',e=>{ if(e.key==='Enter') addTask(); });
+document.getElementById('whoJD').onclick=()=>setWho('JD');
+document.getElementById('whoCh').onclick=()=>setWho('Chayslyn');
+renderWho(); loadPlan(); loadTasks(); subscribe();
+// re-evaluate "today" at midnight rollover
+setInterval(()=>renderPlan(), 600000);
+</script>
+</body>
+</html>
