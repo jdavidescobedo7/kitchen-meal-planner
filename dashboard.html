@@ -203,8 +203,9 @@ async function loadWeather(){
       const t=new Date(p.startTime).toLocaleTimeString([], {hour:'numeric'});
       return `<div class="wxcell"><div class="c1">${t}</div><div class="c2">${wxEmoji(p.shortForecast)}</div><div class="c3">${p.temperature}°</div></div>`;
     }).join('');
-    const days=[]; for(let k=0;k<D.length&&days.length<5;k++){ if(D[k].isDaytime){ const nt=(D[k+1]&&!D[k+1].isDaytime)?D[k+1]:null; days.push({n:D[k].name,hi:D[k].temperature,lo:nt?nt.temperature:null,sf:D[k].shortForecast}); } }
-    document.getElementById('wxDaily').innerHTML=days.map(x=>`<div class="wxcell"><div class="c1">${shortDay(x.n)}</div><div class="c2">${wxEmoji(x.sf)}</div><div class="c3">${x.hi}°${x.lo!=null?' <span class="lo">'+x.lo+'°</span>':''}</div></div>`).join('');
+    const days=[]; for(let k=0;k<D.length&&days.length<5;k++){ if(D[k].isDaytime){ const nt=(D[k+1]&&!D[k+1].isDaytime)?D[k+1]:null; days.push({when:D[k].startTime,hi:D[k].temperature,lo:nt?nt.temperature:null,sf:D[k].shortForecast}); } }
+    const td=new Date().toDateString();
+    document.getElementById('wxDaily').innerHTML=days.map(x=>{ const dt=new Date(x.when); const lbl=dt.toDateString()===td?'Today':dt.toLocaleDateString([], {weekday:'short'}); return `<div class="wxcell"><div class="c1">${lbl}</div><div class="c2">${wxEmoji(x.sf)}</div><div class="c3">${x.hi}°${x.lo!=null?' <span class="lo">'+x.lo+'°</span>':''}</div></div>`; }).join('');
     document.getElementById('wxbar').style.display='';
   }catch(e){ document.getElementById('wxbar').style.display='none'; }
 }
