@@ -23,6 +23,16 @@
   .wx .desc{font-size:15px;color:var(--muted)}
   .wx .hl{font-size:14px;color:var(--muted)}
   .sync{font-size:12px;color:var(--accent2);margin-top:6px}
+  /* weather forecast strip */
+  .wxbar{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px 16px;flex:none}
+  .wxgroup{display:flex;flex-direction:column;gap:6px}
+  .wxgroup .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .cells{display:flex;gap:16px;flex-wrap:wrap}
+  .wxcell{text-align:center;min-width:48px}
+  .wxcell .c1{font-size:11px;color:var(--muted)}
+  .wxcell .c2{font-size:22px;line-height:1.2}
+  .wxcell .c3{font-size:13px;font-weight:700}
+  .wxcell .c3 .lo{color:var(--muted);font-weight:400}
   /* body grid */
   .body{flex:1;display:grid;grid-template-columns:1.1fr .9fr 1fr;gap:14px;min-height:0}
   .col{display:flex;flex-direction:column;gap:14px;min-height:0}
@@ -87,6 +97,17 @@
       <div class="date" id="date">—</div>
     </div>
     <div class="wx" id="wx"><div class="now">—</div><div class="desc">loading weather…</div></div>
+  </div>
+
+  <div class="wxbar" id="wxbar" style="display:none">
+    <div class="wxgroup">
+      <div class="lbl">Next 6 hours · San Antonio</div>
+      <div class="cells" id="wxHourly"></div>
+    </div>
+    <div class="wxgroup">
+      <div class="lbl">5-day</div>
+      <div class="cells" id="wxDaily"></div>
+    </div>
   </div>
 
   <div class="body">
@@ -154,18 +175,38 @@ function tick(){
 }
 tick(); setInterval(tick,15000);
 
-/* ---------- weather (open-meteo, no key) ---------- */
-const WX={0:['Clear','☀️'],1:['Mostly clear','🌤️'],2:['Partly cloudy','⛅'],3:['Cloudy','☁️'],45:['Fog','🌫️'],48:['Fog','🌫️'],51:['Drizzle','🌦️'],53:['Drizzle','🌦️'],55:['Drizzle','🌦️'],61:['Rain','🌧️'],63:['Rain','🌧️'],65:['Heavy rain','🌧️'],71:['Snow','❄️'],73:['Snow','❄️'],75:['Snow','❄️'],80:['Showers','🌦️'],81:['Showers','🌦️'],82:['Showers','🌧️'],95:['Storms','⛈️'],96:['Storms','⛈️'],99:['Storms','⛈️']};
+/* ---------- weather: NOAA / National Weather Service (api.weather.gov), San Antonio ---------- */
+function wxEmoji(s){ s=(s||'').toLowerCase();
+  if(s.includes('thunder')) return '⛈️';
+  if(s.includes('snow')||s.includes('sleet')||s.includes('ice')) return '❄️';
+  if(s.includes('rain')||s.includes('shower')||s.includes('drizzle')) return '🌧️';
+  if(s.includes('fog')||s.includes('haze')) return '🌫️';
+  if(s.includes('partly')) return '⛅';
+  if(s.includes('cloud')||s.includes('overcast')) return '☁️';
+  if(s.includes('sunny')||s.includes('clear')) return '☀️';
+  return '🌡️';
+}
+function shortDay(n){ return (n==='Today'||n==='This Afternoon')?'Today':(n||'').slice(0,3); }
 async function loadWeather(){
   try{
-    const u="https://api.open-meteo.com/v1/forecast?latitude=29.97&longitude=-95.69&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&timezone=auto";
-    const r=await fetch(u); const j=await r.json();
-    const c=j.current, code=WX[c.weather_code]||['',''];
+    const pts=await (await fetch('https://api.weather.gov/points/29.42,-98.49')).json();
+    const [hr,dl]=await Promise.all([
+      fetch(pts.properties.forecastHourly).then(r=>r.json()),
+      fetch(pts.properties.forecast).then(r=>r.json())
+    ]);
+    const H=hr.properties.periods, D=dl.properties.periods;
+    const now=H[0];
     document.getElementById('wx').innerHTML=
-      `<div class="now">${Math.round(c.temperature_2m)}° ${code[1]}</div>`+
-      `<div class="desc">${code[0]}</div>`+
-      `<div class="hl">H ${Math.round(j.daily.temperature_2m_max[0])}° · L ${Math.round(j.daily.temperature_2m_min[0])}°</div>`;
-  }catch(e){ document.getElementById('wx').style.display='none'; }
+      `<div class="now">${now.temperature}° ${wxEmoji(now.shortForecast)}</div>`+
+      `<div class="desc">${now.shortForecast}</div>`;
+    document.getElementById('wxHourly').innerHTML=H.slice(0,6).map(p=>{
+      const t=new Date(p.startTime).toLocaleTimeString([], {hour:'numeric'});
+      return `<div class="wxcell"><div class="c1">${t}</div><div class="c2">${wxEmoji(p.shortForecast)}</div><div class="c3">${p.temperature}°</div></div>`;
+    }).join('');
+    const days=[]; for(let k=0;k<D.length&&days.length<5;k++){ if(D[k].isDaytime){ const nt=(D[k+1]&&!D[k+1].isDaytime)?D[k+1]:null; days.push({n:D[k].name,hi:D[k].temperature,lo:nt?nt.temperature:null,sf:D[k].shortForecast}); } }
+    document.getElementById('wxDaily').innerHTML=days.map(x=>`<div class="wxcell"><div class="c1">${shortDay(x.n)}</div><div class="c2">${wxEmoji(x.sf)}</div><div class="c3">${x.hi}°${x.lo!=null?' <span class="lo">'+x.lo+'°</span>':''}</div></div>`).join('');
+    document.getElementById('wxbar').style.display='';
+  }catch(e){ document.getElementById('wxbar').style.display='none'; }
 }
 loadWeather(); setInterval(loadWeather,1800000);
 
